@@ -1,5 +1,5 @@
 from typing import List, Dict, Set
-from client import client as RoseClient
+from rose_client import RoseClient
 from rose_server import RoseServer
 
 class SSEBenchmark:

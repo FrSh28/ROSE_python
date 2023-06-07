@@ -1,4 +1,4 @@
-from client import client
+from rose_client import RoseClient
 from rose_server import RoseServer
 from sse_benchmark import SSEBenchmark
 

@@ -1,6 +1,7 @@
 import threading
 import time
 import array
+from utils import PRF, KUPRF, HASH, XOR
 
 if_thread_created = False
 counter = 0
@@ -178,6 +179,11 @@ class RoseServer:
             self.if_thread_created = False
 
         self._store = {}
+
+        self.kuprf_P = KUPRF()
+        self.hash_G = HASH(out_len = 32)
+        self.hash_H = HASH(out_len = 33 + 32*2)
+
     def _create_thread(self):
         pass
 
@@ -220,16 +226,15 @@ class RoseServer:
         is_delta_null = True
         s_Lt, s_L1t, s_L1, s_T1, s_T1t, s_tmp = "", "", "", "", "", ""
         L_cache = set()
-        kuprf = KUPRF()
 
-        cip.R = bytearray(cip_R.encode())
-        cip.D = bytearray(cip_D.encode())
-        cip.C = bytearray(cip_C.encode())
+        cip.R = cip_R.encode()
+        cip.D = cip_D.encode()
+        cip.C = cip_C.encode()
 
         self._store[cip_L] = cip
 
         s_Lt = cip_L
-        buf_Dt = bytearray(cip_D.encode())
+        buf_Dt = cip_D.encode()
         opt = "op_srh"
         is_delta_null = True
 
@@ -239,9 +244,9 @@ class RoseServer:
         while True:
             L_cache.add(s_L1)
             cip = self._store[s_L1]
-            Hash_H(buf2, bytearray(s_T1.encode()), cip.R)
+            buf2 = self.hash_H(s_T1.encode(), cip.R)
 
-            Xor(bytearray(cip.D.encode()), buf2, buf3)
+            buf3 = XOR(D.encode(), buf2)
             if buf3[0] == 0xf0:  # del
                 L_cache.remove(s_L1)
                 del self._store[s_L1]
@@ -250,9 +255,9 @@ class RoseServer:
                 s_tmp = buf3[1:34].decode()
                 D.append(s_tmp)
 
-                Xor(bytearray(s_L1t.encode()), buf3[1 + 33:], buf2)
-                Xor(bytearray(s_T1t.encode()), buf3[1 + 33 + 32:], buf2 + 32)
-                Xor(buf_Dt[1 + 33:], buf2, buf_Dt[1 + 33:])
+                XOR(s_L1t.encode(), buf3[1 + 33:], buf2)
+                XOR(s_T1t.encode(), buf3[1 + 33 + 32:], buf2 + 32)
+                XOR(buf_Dt[1 + 33:], buf2, buf_Dt[1 + 33:])
 
                 cip = self._store[s_Lt]
                 cip.D = buf_Dt.decode()
@@ -260,15 +265,15 @@ class RoseServer:
                 s_T1t = buf3[1 + 33 + 32:1 + 33 + 32 + 32].decode()
             elif buf3[0] == 0x0f:  # add
                 for itr in reversed(D):
-                    Hash_G(buf1, bytearray(itr.encode()), cip.R)
-                    if buf1 == bytearray(s_L1.encode()):
+                    self.hash_G(buf1, itr.encode(), cip.R)
+                    if buf1 == s_L1.encode():
                         L_cache.remove(s_L1)
                         del self._store[s_L1]
                         del cip
 
-                        Xor(bytearray(s_L1t.encode()), buf3[1 + 33:], buf2)
-                        Xor(bytearray(s_T1t.encode()), buf3[1 + 33 + 32:], buf2 + 32)
-                        Xor(buf_Dt[1 + 33:], buf2, buf_Dt[1 + 33:])
+                        XOR(s_L1t.encode(), buf3[1 + 33:], buf2)
+                        XOR(s_T1t.encode(), buf3[1 + 33 + 32:], buf2 + 32)
+                        XOR(buf_Dt[1 + 33:], buf2, buf_Dt[1 + 33:])
 
                         cip = self._store[s_Lt]
                         cip.D = buf_Dt.decode()
@@ -290,13 +295,13 @@ class RoseServer:
                     del self._store[s_L1]
                     del cip
 
-                    kuprf.mul(buf1, buf_Deltat, buf3[1:])
-                    Xor(buf_Deltat, buf1, buf_Deltat)
-                    Xor(buf_Dt[1:], buf_Deltat, buf_Dt[1:])
+                    self.kuprf_P.merge_update_token(buf1, buf_Deltat, buf3[1:])
+                    XOR(buf_Deltat, buf1, buf_Deltat)
+                    XOR(buf_Dt[1:], buf_Deltat, buf_Dt[1:])
 
-                    Xor(bytearray(s_L1t.encode()), buf3[1 + 33:], buf2)
-                    Xor(bytearray(s_T1t.encode()), buf3[1 + 33 + 32:], buf2 + 32)
-                    Xor(buf_Dt[1 + 33:], buf2, buf_Dt[1 + 33:])
+                    XOR(s_L1t.encode(), buf3[1 + 33:], buf2)
+                    XOR(s_T1t.encode(), buf3[1 + 33 + 32:], buf2 + 32)
+                    XOR(buf_Dt[1 + 33:], buf2, buf_Dt[1 + 33:])
 
                     cip = self._store[s_Lt]
                     cip.D = buf_Dt.decode()
@@ -313,7 +318,7 @@ class RoseServer:
                     buf_Deltat = buf3[1:33]
                     is_delta_null = False
                 for itr in D:
-                    kuprf.update(buf1, buf3[1:], bytearray(itr.encode()))
+                    self.kuprf_P.update_result(buf1, buf3[1:], itr.encode())
                     itr = buf1[:33].decode()
 
             buf2 = bytearray(64)
@@ -338,16 +343,15 @@ class RoseServer:
         is_delta_null = True
         s_Lt, s_L1t, s_L1, s_T1, s_T1t, s_tmp = "", "", "", "", "", ""
         L_cache = set()
-        kuprf = KUPRF()
 
-        cip.R = bytearray(cip_R.encode())
-        cip.D = bytearray(cip_D.encode())
-        cip.C = bytearray(cip_C.encode())
+        cip.R = cip_R.encode()
+        cip.D = cip_D.encode()
+        cip.C = cip_C.encode()
 
         self._store[cip_L] = cip
 
         s_Lt = cip_L
-        buf_Dt = bytearray(cip_D.encode())
+        buf_Dt = cip_D.encode()
         opt = OpType.op_srh
         is_delta_null = True
 
@@ -357,9 +361,9 @@ class RoseServer:
         while True:
             L_cache.add(s_L1)
             cip = self._store[s_L1]
-            Hash_H(buf2, bytearray(s_T1.encode()), cip.R)
+            self.hash_H(buf2, s_T1.encode()), cip.R
 
-            Xor(bytearray(cip.D.encode()), buf2, buf3)
+            XOR(cip.D.encode(), buf2, buf3)
             if buf3[0] == 0xf0:  # del
                 L_cache.remove(s_L1)
                 del self._store[s_L1]
@@ -368,9 +372,9 @@ class RoseServer:
                 s_tmp = buf3[1:34].decode()
                 D.append(s_tmp)
 
-                Xor(bytearray(s_L1t.encode()), buf3[1 + 33:], buf2)
-                Xor(bytearray(s_T1t.encode()), buf3[1 + 33 + 32:], buf2 + 32)
-                Xor(buf_Dt[1 + 33:], buf2, buf_Dt[1 + 33:])
+                XOR(s_L1t.encode(), buf3[1 + 33:], buf2)
+                XOR(s_T1t.encode(), buf3[1 + 33 + 32:], buf2 + 32)
+                XOR(buf_Dt[1 + 33:], buf2, buf_Dt[1 + 33:])
 
                 cip = self._store[s_Lt]
                 cip.D = buf_Dt.decode()
@@ -382,9 +386,9 @@ class RoseServer:
                     del self._store[s_L1]
                     del cip
 
-                    Xor(bytearray(s_L1t.encode()), buf3[1 + 33:], buf2)
-                    Xor(bytearray(s_T1t.encode()), buf3[1 + 33 + 32:], buf2 + 32)
-                    Xor(buf_Dt[1 + 33:], buf2, buf_Dt[1 + 33:])
+                    XOR(s_L1t.encode(), buf3[1 + 33:], buf2)
+                    XOR(s_T1t.encode(), buf3[1 + 33 + 32:], buf2 + 32)
+                    XOR(buf_Dt[1 + 33:], buf2, buf_Dt[1 + 33:])
 
                     cip = self._store[s_Lt]
                     cip.D = buf_Dt.decode()
@@ -394,7 +398,7 @@ class RoseServer:
 
                 if cip is not None:
                     s_Lt = s_L1
-                    buf_Dt = bytearray(cip.D.encode())
+                    buf_Dt = cip.D.encode()
                     s_L1t = buf3[1 + 33:1 + 33 + 32].decode()
                     s_T1t = buf3[1 + 33 + 32:1 + 33 + 32 + 32].decode()
                     opt = OpType.op_add
@@ -406,13 +410,13 @@ class RoseServer:
                     del self._store[s_L1]
                     del cip
 
-                    kuprf.mul(buf1, buf3[1:], buf_Deltat)
-                    Xor(buf_Deltat, buf1, buf_Deltat)
-                    Xor(buf_Dt[1:], buf_Deltat, buf_Dt[1:])
+                    self.kuprf_P.merge_update_token(buf1, buf3[1:], buf_Deltat)
+                    XOR(buf_Deltat, buf1, buf_Deltat)
+                    XOR(buf_Dt[1:], buf_Deltat, buf_Dt[1:])
 
-                    Xor(bytearray(s_L1t.encode()), buf3[1 + 33:], buf2)
-                    Xor(bytearray(s_T1t.encode()), buf3[1 + 33 + 32:], buf2 + 32)
-                    Xor(buf_Dt[1 + 33:], buf2, buf_Dt[1 + 33:])
+                    XOR(s_L1t.encode(), buf3[1 + 33:], buf2)
+                    XOR(s_T1t.encode(), buf3[1 + 33 + 32:], buf2 + 32)
+                    XOR(buf_Dt[1 + 33:], buf2, buf_Dt[1 + 33:])
 
                     cip = self._store[s_Lt]
                     cip.D = buf_Dt.decode()
@@ -422,7 +426,7 @@ class RoseServer:
                     s_T1t = buf3[1 + 33 + 32:1 + 33 + 32 + 32].decode()
                 else:
                     s_Lt = s_L1
-                    buf_Dt = bytearray(cip.D.encode())
+                    buf_Dt = cip.D.encode()
                     s_L1t = buf3[1 + 33:1 + 33 + 32].decode()
                     s_T1t = buf3[1 + 33 + 32:1 + 33 + 32 + 32].decode()
                     opt = OpType.op_srh
@@ -451,9 +455,9 @@ class RoseServer:
             f_out.write(size.to_bytes(8, "little"))
             for key, value in self._store.items():
                 save_string(f_out, key)
-                f_out.write(bytearray(value.R))
-                f_out.write(bytearray(value.D))
-                f_out.write(bytearray(value.C))
+                f_out.write(value.R)
+                f_out.write(value.D)
+                f_out.write(value.C)
 
 
     def load_data(self, fname):

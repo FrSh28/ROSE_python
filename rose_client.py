@@ -2,7 +2,7 @@ import multiprocessing
 import utils
 
 
-class client:
+class RoseClient:
     def __init__(self):
         pass
 
