@@ -1,4 +1,4 @@
-from rose_client import RoseClient
+from client import client
 from rose_server import RoseServer
 from sse_benchmark import SSEBenchmark
 
@@ -63,7 +63,7 @@ def test_sse():
 
 def benchmark():
     benchmark = SSEBenchmark()
-
+    
     benchmark.Setup("sse_data_test")
     # benchmark.benchmark_gen_add_cipher()
     # benchmark.benchmark_gen_del_cipher()

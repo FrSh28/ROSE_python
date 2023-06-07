@@ -330,57 +330,43 @@ class RoseServer:
         return 0
 
     def search_with_parallel_del(self, result, tpd_L, tpd_T, cip_L, cip_R, cip_D, cip_C, thread_num):
-    x = 0
-    cip = Cipher()
-    buf1, buf2, buf3, buf_Dt, buf_Deltat = bytearray(256), bytearray(256), bytearray(256), bytearray(256), bytearray(256)
-    opt = None
-    D = []
-    is_delta_null = True
-    s_Lt, s_L1t, s_L1, s_T1, s_T1t, s_tmp = "", "", "", "", "", ""
-    L_cache = set()
-    kuprf = KUPRF()
+        x = 0
+        cip = Cipher()
+        buf1, buf2, buf3, buf_Dt, buf_Deltat = bytearray(256), bytearray(256), bytearray(256), bytearray(256), bytearray(256)
+        opt = None
+        D = []
+        is_delta_null = True
+        s_Lt, s_L1t, s_L1, s_T1, s_T1t, s_tmp = "", "", "", "", "", ""
+        L_cache = set()
+        kuprf = KUPRF()
 
-    cip.R = bytearray(cip_R.encode())
-    cip.D = bytearray(cip_D.encode())
-    cip.C = bytearray(cip_C.encode())
+        cip.R = bytearray(cip_R.encode())
+        cip.D = bytearray(cip_D.encode())
+        cip.C = bytearray(cip_C.encode())
 
-    self._store[cip_L] = cip
+        self._store[cip_L] = cip
 
-    s_Lt = cip_L
-    buf_Dt = bytearray(cip_D.encode())
-    opt = OpType.op_srh
-    is_delta_null = True
+        s_Lt = cip_L
+        buf_Dt = bytearray(cip_D.encode())
+        opt = OpType.op_srh
+        is_delta_null = True
 
-    s_L1 = s_L1t = tpd_L
-    s_T1 = s_T1t = tpd_T
+        s_L1 = s_L1t = tpd_L
+        s_T1 = s_T1t = tpd_T
 
-    while True:
-        L_cache.add(s_L1)
-        cip = self._store[s_L1]
-        Hash_H(buf2, bytearray(s_T1.encode()), cip.R)
+        while True:
+            L_cache.add(s_L1)
+            cip = self._store[s_L1]
+            Hash_H(buf2, bytearray(s_T1.encode()), cip.R)
 
-        Xor(bytearray(cip.D.encode()), buf2, buf3)
-        if buf3[0] == 0xf0:  # del
-            L_cache.remove(s_L1)
-            del self._store[s_L1]
-            del cip
-
-            s_tmp = buf3[1:34].decode()
-            D.append(s_tmp)
-
-            Xor(bytearray(s_L1t.encode()), buf3[1 + 33:], buf2)
-            Xor(bytearray(s_T1t.encode()), buf3[1 + 33 + 32:], buf2 + 32)
-            Xor(buf_Dt[1 + 33:], buf2, buf_Dt[1 + 33:])
-
-            cip = self._store[s_Lt]
-            cip.D = buf_Dt.decode()
-            s_L1t = buf3[1 + 33:1 + 33 + 32].decode()
-            s_T1t = buf3[1 + 33 + 32:1 + 33 + 32 + 32].decode()
-        elif buf3[0] == 0x0f:  # add
-            if test_deletion_in_multithread(D, cip.R, s_L1, thread_num):
+            Xor(bytearray(cip.D.encode()), buf2, buf3)
+            if buf3[0] == 0xf0:  # del
                 L_cache.remove(s_L1)
                 del self._store[s_L1]
                 del cip
+
+                s_tmp = buf3[1:34].decode()
+                D.append(s_tmp)
 
                 Xor(bytearray(s_L1t.encode()), buf3[1 + 33:], buf2)
                 Xor(bytearray(s_T1t.encode()), buf3[1 + 33 + 32:], buf2 + 32)
@@ -390,72 +376,86 @@ class RoseServer:
                 cip.D = buf_Dt.decode()
                 s_L1t = buf3[1 + 33:1 + 33 + 32].decode()
                 s_T1t = buf3[1 + 33 + 32:1 + 33 + 32 + 32].decode()
-                cip = None
+            elif buf3[0] == 0x0f:  # add
+                if test_deletion_in_multithread(D, cip.R, s_L1, thread_num):
+                    L_cache.remove(s_L1)
+                    del self._store[s_L1]
+                    del cip
 
-            if cip is not None:
-                s_Lt = s_L1
-                buf_Dt = bytearray(cip.D.encode())
-                s_L1t = buf3[1 + 33:1 + 33 + 32].decode()
-                s_T1t = buf3[1 + 33 + 32:1 + 33 + 32 + 32].decode()
-                opt = OpType.op_add
-                s_tmp = cip.C.decode()
-                result.append(s_tmp)
-        else:
-            if opt == OpType.op_srh and not is_delta_null:
-                L_cache.remove(s_L1)
-                del self._store[s_L1]
-                del cip
+                    Xor(bytearray(s_L1t.encode()), buf3[1 + 33:], buf2)
+                    Xor(bytearray(s_T1t.encode()), buf3[1 + 33 + 32:], buf2 + 32)
+                    Xor(buf_Dt[1 + 33:], buf2, buf_Dt[1 + 33:])
 
-                kuprf.mul(buf1, buf3[1:], buf_Deltat)
-                Xor(buf_Deltat, buf1, buf_Deltat)
-                Xor(buf_Dt[1:], buf_Deltat, buf_Dt[1:])
+                    cip = self._store[s_Lt]
+                    cip.D = buf_Dt.decode()
+                    s_L1t = buf3[1 + 33:1 + 33 + 32].decode()
+                    s_T1t = buf3[1 + 33 + 32:1 + 33 + 32 + 32].decode()
+                    cip = None
 
-                Xor(bytearray(s_L1t.encode()), buf3[1 + 33:], buf2)
-                Xor(bytearray(s_T1t.encode()), buf3[1 + 33 + 32:], buf2 + 32)
-                Xor(buf_Dt[1 + 33:], buf2, buf_Dt[1 + 33:])
-
-                cip = self._store[s_Lt]
-                cip.D = buf_Dt.decode()
-
-                buf_Deltat = buf1
-                s_L1t = buf3[1 + 33:1 + 33 + 32].decode()
-                s_T1t = buf3[1 + 33 + 32:1 + 33 + 32 + 32].decode()
+                if cip is not None:
+                    s_Lt = s_L1
+                    buf_Dt = bytearray(cip.D.encode())
+                    s_L1t = buf3[1 + 33:1 + 33 + 32].decode()
+                    s_T1t = buf3[1 + 33 + 32:1 + 33 + 32 + 32].decode()
+                    opt = OpType.op_add
+                    s_tmp = cip.C.decode()
+                    result.append(s_tmp)
             else:
-                s_Lt = s_L1
-                buf_Dt = bytearray(cip.D.encode())
-                s_L1t = buf3[1 + 33:1 + 33 + 32].decode()
-                s_T1t = buf3[1 + 33 + 32:1 + 33 + 32 + 32].decode()
-                opt = OpType.op_srh
-                buf_Deltat = buf3[1:33]
-                is_delta_null = False
-            update_X_in_multithread(D, buf3[1:], thread_num)
+                if opt == OpType.op_srh and not is_delta_null:
+                    L_cache.remove(s_L1)
+                    del self._store[s_L1]
+                    del cip
 
-        buf2 = bytearray(64)
-        if buf2 == buf3[1 + 33:]:
-            break
-        s_L1 = buf3[1 + 33:1 + 33 + 32].decode()
-        s_T1 = buf3[1 + 33 + 32:1 + 33 + 32 + 32].decode()
+                    kuprf.mul(buf1, buf3[1:], buf_Deltat)
+                    Xor(buf_Deltat, buf1, buf_Deltat)
+                    Xor(buf_Dt[1:], buf_Deltat, buf_Dt[1:])
 
-    if not result:
-        for l in L_cache:
-            cip = self._store[l]
-            del cip
-            del self._store[l]
-    return 0
+                    Xor(bytearray(s_L1t.encode()), buf3[1 + 33:], buf2)
+                    Xor(bytearray(s_T1t.encode()), buf3[1 + 33 + 32:], buf2 + 32)
+                    Xor(buf_Dt[1 + 33:], buf2, buf_Dt[1 + 33:])
+
+                    cip = self._store[s_Lt]
+                    cip.D = buf_Dt.decode()
+
+                    buf_Deltat = buf1
+                    s_L1t = buf3[1 + 33:1 + 33 + 32].decode()
+                    s_T1t = buf3[1 + 33 + 32:1 + 33 + 32 + 32].decode()
+                else:
+                    s_Lt = s_L1
+                    buf_Dt = bytearray(cip.D.encode())
+                    s_L1t = buf3[1 + 33:1 + 33 + 32].decode()
+                    s_T1t = buf3[1 + 33 + 32:1 + 33 + 32 + 32].decode()
+                    opt = OpType.op_srh
+                    buf_Deltat = buf3[1:33]
+                    is_delta_null = False
+                update_X_in_multithread(D, buf3[1:], thread_num)
+
+            buf2 = bytearray(64)
+            if buf2 == buf3[1 + 33:]:
+                break
+            s_L1 = buf3[1 + 33:1 + 33 + 32].decode()
+            s_T1 = buf3[1 + 33 + 32:1 + 33 + 32 + 32].decode()
+
+        if not result:
+            for l in L_cache:
+                cip = self._store[l]
+                del cip
+                del self._store[l]
+        return 0
 
 
-def save_data(self, fname):
-    with open(fname, "wb") as f_out:
-        size = len(self._store)
+    def save_data(self, fname):
+        with open(fname, "wb") as f_out:
+            size = len(self._store)
 
-        f_out.write(size.to_bytes(8, "little"))
-        for key, value in self._store.items():
-            save_string(f_out, key)
-            f_out.write(bytearray(value.R))
-            f_out.write(bytearray(value.D))
-            f_out.write(bytearray(value.C))
+            f_out.write(size.to_bytes(8, "little"))
+            for key, value in self._store.items():
+                save_string(f_out, key)
+                f_out.write(bytearray(value.R))
+                f_out.write(bytearray(value.D))
+                f_out.write(bytearray(value.C))
 
-class RoseServer:
+
     def load_data(self, fname):
         with open(fname, "rb") as f_in:
             size = int.from_bytes(f_in.read(8), "little")

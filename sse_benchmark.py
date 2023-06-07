@@ -1,11 +1,13 @@
 from typing import List, Dict, Set
+from client import client as RoseClient
+from rose_server import RoseServer
 
 class SSEBenchmark:
     def __init__(self):
         self.data_to_encrypt = {}
         self.total_add_records = 0
         self.keyword_number = 0
-
+    
     def Setup(self, filename):
         L = ""
         R = ""
@@ -17,8 +19,8 @@ class SSEBenchmark:
         rose_clnt = RoseClient()
         rose_srv = RoseServer()
         counter = 0
-        fp_clnt = open("rose_client_data.dat", "rb")
-        fp_srv = open("rose_server_data.dat", "rb")
+        # fp_clnt = open("rose_client_data.dat", "rb")
+        # fp_srv = open("rose_server_data.dat", "rb")
 
         self.data_to_encrypt.clear()
         self.total_add_records = 0
@@ -34,25 +36,25 @@ class SSEBenchmark:
             file_numbers = int(f_data.readline())
             for j in range(file_numbers):
                 self.total_add_records += 1
-                name = int(f_data.readline())
+                name = int(f_data.readline().replace('\n', ''), 16)
                 _v.append(name)
         f_data.close()
 
         print("read", self.total_add_records, "save records")
         print()
 
-        if fp_clnt and fp_srv:
-            fp_clnt.close()
-            fp_srv.close()
-        else:
-            rose_clnt.setup()
-            rose_srv.setup()
-            for a in self.data_to_encrypt:
-                for f_name in self.data_to_encrypt[a]:
-                    rose_clnt.encrypt(L, R, D, C, op_add, a, f_name)
-                    rose_srv.save(L, R, D, C)
-            rose_clnt.save_data()
-            rose_srv.save_data()
+        # if fp_clnt and fp_srv:
+        #     fp_clnt.close()
+        #     fp_srv.close()
+        # else:
+        #     rose_clnt.setup()
+        #     rose_srv.setup()
+        #     for a in self.data_to_encrypt:
+        #         for f_name in self.data_to_encrypt[a]:
+        #             rose_clnt.encrypt(L, R, D, C, op_add, a, f_name)
+        #             rose_srv.save(L, R, D, C)
+        #     rose_clnt.save_data()
+        #     rose_srv.save_data()
 
         return 1
 
@@ -131,7 +133,6 @@ class SSEBenchmark:
         R = ""
         D = ""
         C = ""
-
         for itr in self.data_to_encrypt:
             rose_clnt.setup()
             rose_srv.setup()
@@ -494,4 +495,11 @@ class SSEBenchmark:
 
         return 0
 
-
+if __name__ == "__main__":
+    benchmark = SSEBenchmark()
+    
+    benchmark.Setup("sse_data_test")
+    benchmark.benchmark_search()
+    benchmark.benchmark_deletions()
+    benchmark.benchamark_deletion_in_parallel()
+    benchmark.benchmark_opt_deletions()
