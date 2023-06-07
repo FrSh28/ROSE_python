@@ -1,4 +1,4 @@
-from telnetlib import TN3270E
+from enum import IntEnum
 from Cryptodome.Random import get_random_bytes
 from Cryptodome.Util import number, strxor
 from Cryptodome.Hash import HMAC, SHA256, SHA512, SHAKE256, KMAC256
@@ -6,18 +6,28 @@ from Cryptodome.Hash import HMAC, SHA256, SHA512, SHAKE256, KMAC256
 # number.getPrime(8 * out_len)
 MODULUS = 25877549389260330581249947051848916310864513794016566320407061879535978927442699
 
+class OP(IntEnum):
+    OP_DEL  = 0
+    OP_ADD  = 1
+    OP_SRCH = 2
+
+
 def RNG(bytes = 16):
-    return int.from_bytes(gen_key(bytes))
+    return int.from_bytes(get_random_bytes(bytes))
 
 def gen_key(key_len = 16) -> bytes:
     return get_random_bytes(key_len)
 
+def XOR(left: bytes, right: bytes) -> bytes:
+    return strxor.strxor(left, right)
+
+
 class PRF():
     # 16 bytes key, 32 bytes out
-    def __init__(self, out_len) -> None:
+    def __init__(self, out_len = 32) -> None:
         self.out_len = out_len
 
-    def compute(self, key: bytes, keyword: str, id: str, op: str) -> bytes:
+    def compute(self, key: bytes, keyword: str, id: str, op: OP) -> bytes:
         """
         Compute result
         args:
@@ -35,7 +45,7 @@ class PRF():
 
         h.update(keyword.encode('utf-8'))
         h.update(id.encode('utf-8'))
-        h.update(op.encode('utf-8'))
+        h.update(op.to_bytes(1))
 
         return h.digest()
 
@@ -55,7 +65,7 @@ class KUPRF(PRF):
         else:
             raise ValueError(f"modulus cannot be shorter than ourput length ({self.out_len*8} bits)")
 
-    def compute(self, key: bytes, keyword: str, id: str, op: str) -> bytes:
+    def compute(self, key: bytes, keyword: str, id: str, op: OP) -> bytes:
         """
         Compute result
         args:
@@ -67,12 +77,12 @@ class KUPRF(PRF):
         h = SHAKE256.new()
         h.update(keyword.encode('utf-8'))
         h.update(id.encode('utf-8'))
-        h.update(op.encode('utf-8'))
+        h.update(op.to_bytes(1))
         
         base = int.from_bytes(h.digest())
         exp  = int.from_bytes(key)
 
-        return pow(base, exp, self.modulus).to_bytes()
+        return pow(base, exp, self.modulus).to_bytes(self.out_len)
 
     def get_update_token(self, key_ori: bytes, key_new: bytes) -> bytes:
         """
@@ -86,7 +96,7 @@ class KUPRF(PRF):
 
         token = (pow(key_ori, -1, self.modulus) * key_new) % self.modulus
 
-        return token.to_bytes()
+        return token.to_bytes(self.out_len)
 
     def merge_update_token(self, token_ori: bytes, token_new: bytes) -> bytes:
         """
@@ -100,9 +110,9 @@ class KUPRF(PRF):
 
         token = (token_ori * token_new) % self.modulus
 
-        return token.to_bytes()
+        return token.to_bytes(self.out_len)
 
-    def update_result(self, msg: bytes, update_token: bytes) -> int:
+    def update_result(self, msg: bytes, update_token: bytes) -> bytes:
         """
         Compute result
         args:
@@ -112,7 +122,7 @@ class KUPRF(PRF):
         msg = int.from_bytes(msg)
         update_token = int.from_bytes(update_token)
 
-        return pow(msg, update_token, self.modulus).to_bytes()
+        return pow(msg, update_token, self.modulus).to_bytes(self.out_len)
 
 class HASH():
     def __init__(self, out_len = 32) -> None:
@@ -133,10 +143,6 @@ class HASH():
             h = SHAKE256.new(mac_len = self.out_len)
 
         h.update(msg)
-        h.update(R.to_bytes())
+        h.update(R.to_bytes(16))
 
         return h.digest()
-
-
-def XOR(left: bytes, right: bytes) -> bytes:
-    return strxor.strxor(left, right)
