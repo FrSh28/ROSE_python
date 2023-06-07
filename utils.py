@@ -1,4 +1,5 @@
 from enum import IntEnum
+from sys import byteorder
 from Cryptodome.Random import get_random_bytes
 from Cryptodome.Util import number, strxor
 from Cryptodome.Hash import HMAC, SHA256, SHA512, SHAKE256, KMAC256
@@ -7,13 +8,13 @@ from Cryptodome.Hash import HMAC, SHA256, SHA512, SHAKE256, KMAC256
 MODULUS = 25877549389260330581249947051848916310864513794016566320407061879535978927442699
 
 class OP(IntEnum):
-    OP_DEL  = 0
-    OP_ADD  = 1
-    OP_SRCH = 2
+    OP_ADD  = 0x0f
+    OP_DEL  = 0xf0
+    OP_SRCH = 0xff
 
 
-def RNG(bytes = 16):
-    return int.from_bytes(get_random_bytes(bytes))
+def gen_rand(bytes = 16) -> int:
+    return int.from_bytes(get_random_bytes(bytes), byteorder = 'big')
 
 def gen_key(key_len = 16) -> bytes:
     return get_random_bytes(key_len)
@@ -45,7 +46,7 @@ class PRF():
 
         h.update(keyword.encode('utf-8'))
         h.update(id.encode('utf-8'))
-        h.update(op.to_bytes(1))
+        h.update(op.to_bytes(1, byteorder = 'big'))
 
         return h.digest()
 
@@ -77,12 +78,12 @@ class KUPRF(PRF):
         h = SHAKE256.new()
         h.update(keyword.encode('utf-8'))
         h.update(id.encode('utf-8'))
-        h.update(op.to_bytes(1))
+        h.update(op.to_bytes(1, byteorder = 'big'))
         
-        base = int.from_bytes(h.digest())
-        exp  = int.from_bytes(key)
+        base = int.from_bytes(h.read(self.out_len), byteorder = 'big')
+        exp  = int.from_bytes(key, byteorder = 'big')
 
-        return pow(base, exp, self.modulus).to_bytes(self.out_len)
+        return pow(base, exp, self.modulus).to_bytes(self.out_len, byteorder = 'big')
 
     def get_update_token(self, key_ori: bytes, key_new: bytes) -> bytes:
         """
@@ -91,12 +92,12 @@ class KUPRF(PRF):
             key_ori: original key for KUPRF
             key_new: new key for KUPRF
         """
-        key_ori = int.from_bytes(key_ori)
-        key_new = int.from_bytes(key_new)
+        key_ori = int.from_bytes(key_ori, byteorder = 'big')
+        key_new = int.from_bytes(key_new, byteorder = 'big')
 
         token = (pow(key_ori, -1, self.modulus) * key_new) % self.modulus
 
-        return token.to_bytes(self.out_len)
+        return token.to_bytes(self.out_len, byteorder = 'big')
 
     def merge_update_token(self, token_ori: bytes, token_new: bytes) -> bytes:
         """
@@ -105,12 +106,12 @@ class KUPRF(PRF):
             token_ori: original token for KUPRF
             token_new: new token for KUPRF
         """
-        token_ori = int.from_bytes(token_ori)
-        token_new = int.from_bytes(token_new)
+        token_ori = int.from_bytes(token_ori, byteorder = 'big')
+        token_new = int.from_bytes(token_new, byteorder = 'big')
 
         token = (token_ori * token_new) % self.modulus
 
-        return token.to_bytes(self.out_len)
+        return token.to_bytes(self.out_len, byteorder = 'big')
 
     def update_result(self, msg: bytes, update_token: bytes) -> bytes:
         """
@@ -119,10 +120,10 @@ class KUPRF(PRF):
             mag: original message
             update_token: key update token
         """
-        msg = int.from_bytes(msg)
-        update_token = int.from_bytes(update_token)
+        msg = int.from_bytes(msg, byteorder = 'big')
+        update_token = int.from_bytes(update_token, byteorder = 'big')
 
-        return pow(msg, update_token, self.modulus).to_bytes(self.out_len)
+        return pow(msg, update_token, self.modulus).to_bytes(self.out_len, byteorder = 'big')
 
 class HASH():
     def __init__(self, out_len = 32) -> None:
@@ -140,9 +141,12 @@ class HASH():
         elif self.out_len == 64:
             h = SHA512.new()
         else:
-            h = SHAKE256.new(mac_len = self.out_len)
+            h = SHAKE256.new()
 
         h.update(msg)
-        h.update(R.to_bytes(16))
+        h.update(R.to_bytes(16, byteorder = 'big'))
 
-        return h.digest()
+        if self.out_len == 32 or self.out_len == 64:
+            return h.digest()
+        else:
+            return h.read(self.out_len)
