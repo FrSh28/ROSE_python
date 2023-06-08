@@ -96,7 +96,7 @@ class RoseClient:
         self.connection.send(load)
 
         search_result = self.connection.recv()
-        if len(search_result) > 0:
+        if search_result:
             id_list = []
             for id_enc in search_result:
                 id_list.append(self.cipher.decrypt(id_enc))
