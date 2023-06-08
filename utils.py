@@ -1,11 +1,10 @@
 from enum import IntEnum
-from sys import byteorder
 from Cryptodome.Random import get_random_bytes
 from Cryptodome.Util import number, strxor
 from Cryptodome.Hash import HMAC, SHA256, SHA512, SHAKE256, KMAC256
 
 # number.getPrime(8 * out_len)
-MODULUS = 25877549389260330581249947051848916310864513794016566320407061879535978927442699
+MODULUS = 82780903016092701894705124364094262056822756907448301137246291323211180381597
 
 class OP(IntEnum):
     OP_ADD  = 0x0f
@@ -51,8 +50,8 @@ class PRF():
         return h.digest()
 
 class KUPRF(PRF):
-    # 32 bytes key, 33 bytes out
-    def __init__(self, out_len = 33) -> None:
+    # 32 bytes key, 32 bytes out
+    def __init__(self, out_len = 32) -> None:
         super().__init__()
         self.out_len = out_len
         self.modulus = MODULUS      # number.getPrime(8 * out_len)

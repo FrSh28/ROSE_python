@@ -4,18 +4,20 @@ from utils import OP, PRF, KUPRF, HASH, XOR, gen_rand, gen_key
 
 
 class RoseClient:
-    def __init__(self) -> None:
+    def __init__(self, connection) -> None:
         self.key_sym = gen_key(16)
         self.cipher = SYM_ENC(self.key_sym)
 
-        self.kuprf_P = KUPRF(out_len = 33)
+        self.kuprf_P = KUPRF(out_len = 32)
         self.hash_G = HASH(out_len = 32)
 
         self.prf_F = PRF(out_len = 32)
-        self.hash_H = HASH(out_len = 1 + 33 + 32 + 32)
+        self.hash_H = HASH(out_len = 1 + 32 + 32 + 32)
 
         self.last_key = {}      # { "keyword": {"K": bytes, "S": bytes} }
         self.last_update = {}   # { "keyword": {"op": OP, "id": str, "R": int} }
+
+        self.connection = connection
 
     def update(self, op: OP, keyword: str, id: str) -> None:
         if keyword in self.last_key:
@@ -42,11 +44,11 @@ class RoseClient:
             if op == OP.OP_DEL:
                 del_token = self.kuprf_P.compute(K, keyword, id, OP.OP_ADD)
             else:
-                del_token = bytes(33)
+                del_token = bytes(32)
 
             pad = op.to_bytes(1, byteorder = 'big') + del_token + last_L + last_T
         else:
-            pad = op.to_bytes(1, byteorder = 'big') + bytes(33 + 32 + 32)
+            pad = op.to_bytes(1, byteorder = 'big') + bytes(32 + 32 + 32)
 
         hash_result = self.hash_H.compute(self.prf_F.compute(S, keyword, id, op), R)
         D = XOR(hash_result, pad)
