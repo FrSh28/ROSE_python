@@ -150,7 +150,11 @@ if __name__ == "__main__":
     print("Complete!")
 
     while True:
-        op_str = input("Operation(add/del/srch): ")
+        try:
+            op_str = input("Operation(add/del/srch): ")
+        except:
+            print("End of File.")
+            break
         if op_str == "add":
             op = OP.OP_ADD
         elif op_str == "del":
@@ -164,8 +168,9 @@ if __name__ == "__main__":
 
         if op == OP.OP_SRCH:
             id_list = client.search(keyword)
-            for idx, file_id in enumerate(id_list, start = 1):
-                print(f"[{idx:3d}]: {file_id}")
+            if id_list != None:
+                for idx, file_id in enumerate(id_list, start = 1):
+                    print(f"[{idx:3d}]: {file_id}")
         else:
             id = input("File identifier: ")
             client.update(op, keyword, id)

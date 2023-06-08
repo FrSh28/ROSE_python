@@ -33,6 +33,7 @@ class RoseServer:
         self.kuprf_P = KUPRF()
         self.hash_G = HASH(out_len = 32)
         self.hash_H = HASH(out_len = 1 + 33 + 32*2)
+        self.op_cnt = 0
 
     def _create_thread(self):
         pass
@@ -59,17 +60,13 @@ class RoseServer:
 
     def save(self, query):
         self._save(query['L'], query['R'], query['D'], query['C'])
-        self._save_to_json()
-    def _save_to_json(self):
-        tmp = {}
-        for k, cip in self._store.items():
-            tmp[k] = cip.get_save_format()
-        # print(tmp)
-        # with open('db.json', 'w') as f:
-        #     json.dump(tmp, f, indent=4)
+        self.save_data(f'logs/step_{self.op_cnt}.txt')
+        self.op_cnt+=1
+
     def _save(self, L, R, D, C):
         cip = Cipher(R, D, C)
         self._store[L] = cip
+        
         return 0
 
     def search(self, query):
@@ -104,7 +101,6 @@ class RoseServer:
             buf2[:1 + 32 * 2 + 33] = self.hash_H.compute(s_T1, cip.R)
             buf3[:1 + 33 + 32 * 2] = XOR(cip.D[:1 + 33 + 32 * 2], buf2[:1 + 33 + 32 * 2])
             if buf3[0] == 0xf0:  # del
-                print('del branch')
                 L_cache.remove(s_L1)
                 del self._store[s_L1]
                 del cip
@@ -123,11 +119,8 @@ class RoseServer:
                 s_L1t = buf3[1 + 33:1 + 33 + 32]
                 s_T1t = buf3[1 + 33 + 32:1 + 33 + 32 + 32]
             elif buf3[0] == 0x0f:  # add
-                print('add branch')
                 for itr in reversed(D):
                     buf1[:32] = self.hash_G.compute(itr, cip.R)
-                    print(len(buf1), buf1)
-                    print(len(s_L1), s_L1)
                     if buf1[:32] == s_L1[:32]:
                         L_cache.remove(s_L1)
                         del self._store[s_L1]
@@ -154,7 +147,6 @@ class RoseServer:
                     s_tmp = cip.C
                     result.append(s_tmp)
             else:
-                print('srch branch')
                 if opt == "op_srh" and not is_delta_null:
                     L_cache.remove(s_L1)
                     del self._store[s_L1]
@@ -202,15 +194,13 @@ class RoseServer:
         return result
 
     def save_data(self, fname):
-        with open(fname, "wb") as f_out:
-            size = len(self._store)
+        with open(fname, 'w') as f:
+            for k, cip in self._store.items():
+                f.write(f'L: {k}\n')
+                f.write(f'\tR: {cip.R}\n')
+                f.write(f'\tD: {cip.D}\n')
+                f.write(f'\tC: {cip.C}\n')
 
-            f_out.write(size.to_bytes(8, "little"))
-            for key, value in self._store.items():
-                save_string(f_out, key)
-                f_out.write(value.R)
-                f_out.write(value.D)
-                f_out.write(value.C)
 
 if __name__ == "__main__":
     from multiprocessing.connection import Listener
@@ -222,9 +212,13 @@ if __name__ == "__main__":
     with Listener(address) as listener:
         with listener.accept() as conn:
             while True:
-                query = conn.recv()
-                if "trapdoor" in query:
-                    results = server.search(query)
-                    conn.send(results)
-                else:
-                    server.save(query)
+                try:
+                    query = conn.recv()
+                    if "trapdoor" in query:
+                        results = server.search(query)
+                        conn.send(results)
+                    else:
+                        server.save(query)
+                except EOFError as e:
+                    print("all task are finished, disconnected ")
+                    break
