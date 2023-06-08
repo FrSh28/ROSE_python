@@ -2,6 +2,7 @@ import threading
 import time
 import array
 from utils import PRF, KUPRF, HASH, XOR
+CIPHER_SIZE = 32
 
 if_thread_created = False
 counter = 0
@@ -167,7 +168,20 @@ def update_X_in_multithread(D, update_token, thread_num):
             D.append(itr1)
 
         del _arg[i].updated_D
-
+class Cipher:
+    def __init__(self, R, D, C):
+        self.R = self._encode_R(R)
+        self.D = self._encode_D(D)
+        self.C = self._encode_C(C)
+    def _encode_R(self, R):
+        return R
+    def _encode_D(self, D):
+        return D[:1 + 33 + 32 * 2]
+    def _encode_C(self, C):
+        return C
+    def get_save_format(self):
+        return {'R': self.R, 'D': self.D, 'C': self.C}
+    
 class RoseServer:
     def __init__(self, enable_thread=False):
         self.if_thread_created = False
@@ -182,7 +196,7 @@ class RoseServer:
 
         self.kuprf_P = KUPRF()
         self.hash_G = HASH(out_len = 32)
-        self.hash_H = HASH(out_len = 33 + 32*2)
+        self.hash_H = HASH(out_len = 1 + 33 + 32*2)
 
     def _create_thread(self):
         pass
@@ -207,19 +221,34 @@ class RoseServer:
         self._store.clear()
 
         return 0
-
-    def save(self, L, R, D, C):
-        cip = Cipher()
-
-        cip.R = R.encode()
-        cip.D = D.encode()
-        cip.C = C.encode()
-
+    def save(self, query):
+        self._save(query['L'], query['R'], query['D'], query['C'])
+        self._save_to_json()
+    def _save_to_json(self):
+        tmp = {}
+        for k, cip in self._store.items():
+            tmp[k] = cip.get_save_format()
+        # print(tmp)
+        # with open('db.json', 'w') as f:
+        #     json.dump(tmp, f, indent=4)
+    def _save(self, L, R, D, C):
+        cip = Cipher(R, D, C)
         self._store[L] = cip
-
         return 0
-    def search(self, result, tpd_L, tpd_T, cip_L, cip_R, cip_D, cip_C):
-        cip = Cipher()
+
+    def search(self, query):
+        # for k, v in query.items():
+        #     print(k, type(v))
+        # return []
+        return self._search(tpd_L=query['trapdoor']['srch_L'],
+                           tpd_T=query['trapdoor']['srch_T'],
+                           cip_L=query['L'],
+                           cip_R=query['R'],
+                           cip_D=query['D'],
+                           cip_C=query['C'])
+    def _search(self, tpd_L, tpd_T, cip_L, cip_R, cip_D, cip_C):
+        result = []
+        cip = Cipher(cip_R, cip_D, cip_C)
         buf1, buf2, buf3, buf_Dt, buf_Deltat = bytearray(256), bytearray(256), bytearray(256), bytearray(256), bytearray(256)
         opt = None
         D = []
@@ -227,26 +256,21 @@ class RoseServer:
         s_Lt, s_L1t, s_L1, s_T1, s_T1t, s_tmp = "", "", "", "", "", ""
         L_cache = set()
 
-        cip.R = cip_R.encode()
-        cip.D = cip_D.encode()
-        cip.C = cip_C.encode()
-
         self._store[cip_L] = cip
 
         s_Lt = cip_L
-        buf_Dt = cip_D.encode()
+        # buf_Dt = cip_D.encode()
+        buf_Dt = cip.D
         opt = "op_srh"
         is_delta_null = True
-
         s_L1 = s_L1t = tpd_L
         s_T1 = s_T1t = tpd_T
-
+        cnt = 0
         while True:
             L_cache.add(s_L1)
             cip = self._store[s_L1]
-            buf2 = self.hash_H(s_T1.encode(), cip.R)
-
-            buf3 = XOR(D.encode(), buf2)
+            buf2 = self.hash_H.compute(s_T1, cip.R)
+            buf3 = XOR(cip.D, buf2)
             if buf3[0] == 0xf0:  # del
                 L_cache.remove(s_L1)
                 del self._store[s_L1]
@@ -283,11 +307,11 @@ class RoseServer:
                         break
                 if cip is not None:
                     s_Lt = s_L1
-                    buf_Dt = cip.D.encode()
+                    buf_Dt = cip.D
                     s_L1t = buf3[1 + 33:1 + 33 + 32].decode()
                     s_T1t = buf3[1 + 33 + 32:1 + 33 + 32 + 32].decode()
                     opt = "op_add"
-                    s_tmp = cip.C.decode()
+                    s_tmp = cip.C
                     result.append(s_tmp)
             else:
                 if opt == "op_srh" and not is_delta_null:
@@ -322,7 +346,8 @@ class RoseServer:
                     itr = buf1[:33].decode()
 
             buf2 = bytearray(64)
-            if buf2 == buf3[1 + 33:]:
+            
+            if buf2[:64] == bytearray(buf3[1 + 33:]):
                 break
             s_L1 = buf3[1 + 33:1 + 33 + 32].decode()
             s_T1 = buf3[1 + 33 + 32:1 + 33 + 32 + 32].decode()
@@ -332,9 +357,10 @@ class RoseServer:
                 cip = self._store[l]
                 del cip
                 del self._store[l]
-        return 0
+        return result
 
-    def search_with_parallel_del(self, result, tpd_L, tpd_T, cip_L, cip_R, cip_D, cip_C, thread_num):
+    def search_with_parallel_del(self, tpd_L, tpd_T, cip_L, cip_R, cip_D, cip_C, thread_num):
+        result = []
         x = 0
         cip = Cipher()
         buf1, buf2, buf3, buf_Dt, buf_Deltat = bytearray(256), bytearray(256), bytearray(256), bytearray(256), bytearray(256)
@@ -445,7 +471,7 @@ class RoseServer:
                 cip = self._store[l]
                 del cip
                 del self._store[l]
-        return 0
+        return result
 
 
     def save_data(self, fname):
@@ -492,3 +518,20 @@ class RoseServer:
 
             self.threads.append(t1)
             self.threads.append(t2)
+
+if __name__ == "__main__":
+    from multiprocessing.connection import Listener
+    from array import array
+    server = RoseServer()
+    server.setup()
+    address = ('localhost', 6041)     # family is deduced to be 'AF_INET'
+
+    with Listener(address) as listener:
+        with listener.accept() as conn:
+            while True:
+                query = conn.recv()
+                if "trapdoor" in query:
+                    results = server.search(query)
+                    conn.send(results)
+                else:
+                    server.save(query)

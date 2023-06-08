@@ -19,7 +19,7 @@ class RoseClient:
         self.last_key = {}      # { "keyword": {"K": bytes, "S": bytes} }
         self.last_update = {}   # { "keyword": {"op": OP, "id": str, "R": int} }
 
-    def setup(self, address = ("localhost", 6000)) -> None:
+    def setup(self, address = ("localhost", 6041)) -> None:
         self.connection = Client(address)
         # self.connection.send(self.kuprf_P.get_modulus())
 
@@ -101,7 +101,7 @@ class RoseClient:
         self.connection.send(load)
 
         search_result = self.connection.recv()
-
+        print(search_result)
         if len(search_result) > 0:
             id_list = []
             for id_enc in search_result:
@@ -113,6 +113,7 @@ class RoseClient:
             del self.last_key[keyword]
             del self.last_update[keyword]
             return None
+        
 
 
 class SYM_ENC:
@@ -131,7 +132,7 @@ class SYM_ENC:
         try:
             aes = AES.new(self.key, AES.MODE_GCM, nonce = cipher["nonce"])
 
-            data = aes.decrypt_and_verify(cipher["ciphertext"], mac_tag = cipher["tag"])
+            data = aes.decrypt_and_verify(cipher["ciphertext"], received_mac_tag = cipher["tag"]) # TODO
             msg = Padding.unpad(data.encode('utf-8'), 16)
 
             return msg.decode('utf-8')
