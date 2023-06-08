@@ -183,8 +183,8 @@ class RoseServer:
             buf2[:64] = bytearray(64)
             if buf2[:64] == buf3[1 + 33: 1 + 33 + 64]:
                 break
-            s_L1 = bytes(buf3[1 + 33:1 + 33 + 32])
-            s_T1 = buf3[1 + 33 + 32:1 + 33 + 32 + 32]
+            s_L1 = bytes(buf3[1 + 33: 1 + 33 + 32])
+            s_T1 = bytes(buf3[1 + 33 + 32:1 + 33 + 32 + 32])
 
         if not result:
             for l in L_cache:

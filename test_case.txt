@@ -1,7 +1,8 @@
 add
 1
 1
-srch1
+srch
+1
 1
 del
 1
@@ -39,4 +40,5 @@ del
 del
 3
 3
-srch3
+srch
+3
