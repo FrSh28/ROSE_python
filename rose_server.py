@@ -20,7 +20,7 @@ class RoseServer:
 
         self.kuprf_P = KUPRF()
         self.hash_G = HASH(out_len = 32)
-        self.hash_H = HASH(out_len = 1 + 32 + 32*2)
+        self.hash_H = HASH(out_len = 1 + 33 + 32 + 32)
         self.op_cnt = 0
 
     def save(self, query):
@@ -56,29 +56,32 @@ class RoseServer:
             cip = self._store[s_L1]
             tmp = XOR(cip.D, self.hash_H.compute(s_T1, cip.R))
             s_op1 = tmp[0]
-            s_token1 = tmp[1:1+32]
-            s_L11 = tmp[1+32:1+32+32]
-            s_T11 = tmp[1+32+32:1+32+32+32]
+            s_token1 = tmp[1 : 1 + 33]
+            s_L11 = tmp[1+33 : 1+33 + 32]
+            s_T11 = tmp[1+33+32 : 1+33+32 + 32]
 
             if s_op1 == OP.OP_DEL:  # del
                 L_cache.remove(s_L1)
                 del self._store[s_L1]
 
                 del_list.append(s_token1)
+                # print("+++  ", s_token1)
 
-                pad = bytes(1+32) + XOR(s_L1t, s_L11) + XOR(s_T1t, s_T11)
+                pad = bytes(1+33) + XOR(s_L1t, s_L11) + XOR(s_T1t, s_T11)
                 self._store[s_Lt].D = XOR(self._store[s_Lt].D , pad)
 
                 s_L1t = s_L11
                 s_T1t = s_T11
             elif s_op1 == OP.OP_ADD:  # add
                 for itr in reversed(del_list):
+                    # print("ttt  ", itr)
                     del_token = self.hash_G.compute(itr, cip.R)
-                    if s_L1 == del_token:
+                    # print("===  ", s_L1, del_token)
+                    if s_L1 == del_token:       # if s_L1[1:] == del_token[1:]:
                         L_cache.remove(s_L1)
                         del self._store[s_L1]
 
-                        pad = bytes(1+32) + XOR(s_L1t, s_L11) + XOR(s_T1t, s_T11)
+                        pad = bytes(1+33) + XOR(s_L1t, s_L11) + XOR(s_T1t, s_T11)
                         self._store[s_Lt].D = XOR(self._store[s_Lt].D , pad)
 
                         s_L1t = s_L11
@@ -100,7 +103,7 @@ class RoseServer:
                     tmp = self.kuprf_P.merge_update_token(Deltat, s_token1)
                     
                     pad = bytes(1) + XOR(Deltat, tmp) + XOR(s_L1t, s_L11) + XOR(s_T1t, s_T11)
-                    self._store[s_Lt].D = XOR(self._store[s_Lt].D , pad)
+                    self._store[s_Lt].D = XOR(self._store[s_Lt].D, pad)
 
                     s_L1t = s_L11
                     s_T1t = s_T11
@@ -113,7 +116,9 @@ class RoseServer:
                     Deltat = s_token1
 
                 for i in range(len(del_list)):
-                    del_list[i] = self.kuprf_P.update_result(s_token1, del_list[i])
+                    # print("   ", del_list[i])
+                    del_list[i] = self.kuprf_P.update_result(del_list[i], s_token1)
+                    # print("   ", del_list[i])
 
             s_L1 = s_L11
             s_T1 = s_T11

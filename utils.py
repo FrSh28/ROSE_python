@@ -1,10 +1,9 @@
 from enum import IntEnum
 from Cryptodome.Random import get_random_bytes
-from Cryptodome.Util import number, strxor
+from Cryptodome.Util import strxor
 from Cryptodome.Hash import HMAC, SHA256, SHA512, SHAKE256, KMAC256
+from secp256k1 import Curve
 
-# number.getPrime(8 * out_len)
-MODULUS = 82780903016092701894705124364094262056822756907448301137246291323211180381597
 
 class OP(IntEnum):
     OP_ADD  = 0x0f
@@ -50,20 +49,14 @@ class PRF():
         return h.digest()
 
 class KUPRF(PRF):
-    # 32 bytes key, 32 bytes out
-    def __init__(self, out_len = 32) -> None:
+    # 32 bytes key, 33 bytes out
+    def __init__(self) -> None:
         super().__init__()
-        self.out_len = out_len
-        self.modulus = MODULUS      # number.getPrime(8 * out_len)
+        self.curve = Curve()
 
-    def get_modulus(self) -> int:
-        return self.modulus
-
-    def set_modulus(self, modulus) -> int:
-        if modulus >> (8 * self.out_len - 1):
-            self.modulus = modulus
-        else:
-            raise ValueError(f"modulus cannot be shorter than ourput length ({self.out_len*8} bits)")
+    def gen_key(self) -> bytes:
+        key = ( gen_rand(32) % (self.curve.n - 1) ) + 1
+        return key.to_bytes(32, byteorder = 'big')
 
     def compute(self, key: bytes, keyword: str, id: str, op: OP) -> bytes:
         """
@@ -74,15 +67,17 @@ class KUPRF(PRF):
             id: message to compute result
             op: message to compute result
         """
-        h = SHAKE256.new()
+        h = SHA256.new()
         h.update(keyword.encode('utf-8'))
         h.update(id.encode('utf-8'))
         h.update(op.to_bytes(1, byteorder = 'big'))
-        
-        base = int.from_bytes(h.read(self.out_len), byteorder = 'big')
-        exp  = int.from_bytes(key, byteorder = 'big')
 
-        return pow(base, exp, self.modulus).to_bytes(self.out_len, byteorder = 'big')
+        hash_result = h.digest()
+        points = self.curve.mul(self.curve.g, int.from_bytes(hash_result, byteorder = 'big'))
+        key = int.from_bytes(key, byteorder = 'big')
+
+        # 33 bytes
+        return self.curve.compress(self.curve.mul(points, key))
 
     def get_update_token(self, key_ori: bytes, key_new: bytes) -> bytes:
         """
@@ -94,9 +89,9 @@ class KUPRF(PRF):
         key_ori = int.from_bytes(key_ori, byteorder = 'big')
         key_new = int.from_bytes(key_new, byteorder = 'big')
 
-        token = (pow(key_ori, -1, self.modulus) * key_new) % self.modulus
+        token = (pow(key_ori, -1, self.curve.n) * key_new) % self.curve.n
 
-        return token.to_bytes(self.out_len, byteorder = 'big')
+        return token.to_bytes(33, byteorder = 'big')
 
     def merge_update_token(self, token_ori: bytes, token_new: bytes) -> bytes:
         """
@@ -108,9 +103,9 @@ class KUPRF(PRF):
         token_ori = int.from_bytes(token_ori, byteorder = 'big')
         token_new = int.from_bytes(token_new, byteorder = 'big')
 
-        token = (token_ori * token_new) % self.modulus
+        token = (token_ori * token_new) % self.curve.n
 
-        return token.to_bytes(self.out_len, byteorder = 'big')
+        return token.to_bytes(33, byteorder = 'big')
 
     def update_result(self, msg: bytes, update_token: bytes) -> bytes:
         """
@@ -119,10 +114,11 @@ class KUPRF(PRF):
             mag: original message
             update_token: key update token
         """
-        msg = int.from_bytes(msg, byteorder = 'big')
+        points = self.curve.decompress(msg)
         update_token = int.from_bytes(update_token, byteorder = 'big')
 
-        return pow(msg, update_token, self.modulus).to_bytes(self.out_len, byteorder = 'big')
+
+        return self.curve.compress(self.curve.mul(points, update_token))
 
 class HASH():
     def __init__(self, out_len = 32) -> None:

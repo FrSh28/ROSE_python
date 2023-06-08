@@ -8,11 +8,11 @@ class RoseClient:
         self.key_sym = gen_key(16)
         self.cipher = SYM_ENC(self.key_sym)
 
-        self.kuprf_P = KUPRF(out_len = 32)
+        self.kuprf_P = KUPRF()
         self.hash_G = HASH(out_len = 32)
 
         self.prf_F = PRF(out_len = 32)
-        self.hash_H = HASH(out_len = 1 + 32 + 32 + 32)
+        self.hash_H = HASH(out_len = 1 + 33 + 32 + 32)
 
         self.last_key = {}      # { "keyword": {"K": bytes, "S": bytes} }
         self.last_update = {}   # { "keyword": {"op": OP, "id": str, "R": int} }
@@ -44,11 +44,11 @@ class RoseClient:
             if op == OP.OP_DEL:
                 del_token = self.kuprf_P.compute(K, keyword, id, OP.OP_ADD)
             else:
-                del_token = bytes(32)
+                del_token = bytes(33)
 
             pad = op.to_bytes(1, byteorder = 'big') + del_token + last_L + last_T
         else:
-            pad = op.to_bytes(1, byteorder = 'big') + bytes(32 + 32 + 32)
+            pad = op.to_bytes(1, byteorder = 'big') + bytes(33 + 32 + 32)
 
         hash_result = self.hash_H.compute(self.prf_F.compute(S, keyword, id, op), R)
         D = XOR(hash_result, pad)
@@ -74,7 +74,7 @@ class RoseClient:
         R = gen_rand(16)
         C = self.cipher.encrypt(id)
 
-        key_update_token = self.kuprf_P.get_update_token(last_K, K)
+        key_update_token = self.kuprf_P.get_update_token(K, last_K)
         L = self.hash_G.compute(self.kuprf_P.compute(K, keyword, "", op), R)
 
         last_rec = self.last_update[keyword]
