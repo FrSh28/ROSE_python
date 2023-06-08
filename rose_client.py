@@ -101,6 +101,7 @@ class RoseClient:
         self.connection.send(load)
 
         search_result = self.connection.recv()
+        print(search_result)
         if len(search_result) > 0:
             id_list = []
             for id_enc in search_result:
