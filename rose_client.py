@@ -1,5 +1,3 @@
-from ast import keyword
-from multiprocessing.connection import Client
 from Cryptodome.Util import Padding
 from Cryptodome.Cipher import AES
 from utils import OP, PRF, KUPRF, HASH, XOR, gen_rand, gen_key
@@ -18,10 +16,6 @@ class RoseClient:
 
         self.last_key = {}      # { "keyword": {"K": bytes, "S": bytes} }
         self.last_update = {}   # { "keyword": {"op": OP, "id": str, "R": int} }
-
-    def setup(self, address = ("localhost", 6041)) -> None:
-        self.connection = Client(address)
-        # self.connection.send(self.kuprf_P.get_modulus())
 
     def update(self, op: OP, keyword: str, id: str) -> None:
         if keyword in self.last_key:
@@ -64,8 +58,7 @@ class RoseClient:
 
     def search(self, keyword) -> list:
         if not keyword in self.last_update:
-            print("No data available")
-            return
+            return None
 
         keys = self.last_key[keyword]
         last_K = keys["K"]
@@ -101,7 +94,6 @@ class RoseClient:
         self.connection.send(load)
 
         search_result = self.connection.recv()
-        print(search_result)
         if len(search_result) > 0:
             id_list = []
             for id_enc in search_result:
@@ -142,37 +134,43 @@ class SYM_ENC:
             return None
 
 if __name__ == "__main__":
+    from multiprocessing.connection import Client
+
     print("This is the client of ROSE_Python demo...\n")
 
+    address = ('localhost', 6041)     # family is deduced to be 'AF_INET'
+
     print("Initializing...")
-    client = RoseClient()
-    client.setup()
-    print("Complete!")
+    with Client(address) as conn:
+        client = RoseClient(conn)
+        print("Complete!")
 
-    while True:
-        try:
-            op_str = input("Operation(add/del/srch): ")
-        except:
-            print("End of File.")
-            break
-        if op_str == "add":
-            op = OP.OP_ADD
-        elif op_str == "del":
-            op = OP.OP_DEL
-        elif op_str == "srch":
-            op = OP.OP_SRCH
-        else:
-            continue
+        while True:
+            try:
+                op_str = input("Operation(add/del/srch): ")
+            except:
+                print("End of File.")
+                break
+            if op_str == "add":
+                op = OP.OP_ADD
+            elif op_str == "del":
+                op = OP.OP_DEL
+            elif op_str == "srch":
+                op = OP.OP_SRCH
+            else:
+                continue
 
-        keyword = input("Keyword: ")
+            keyword = input("Keyword: ")
 
-        if op == OP.OP_SRCH:
-            id_list = client.search(keyword)
-            if id_list != None:
-                for idx, file_id in enumerate(id_list, start = 1):
-                    print(f"[{idx:3d}]: {file_id}")
-        else:
-            id = input("File identifier: ")
-            client.update(op, keyword, id)
-        
-        print("Operation success!\n")
+            if op == OP.OP_SRCH:
+                id_list = client.search(keyword)
+                if id_list is None:
+                    print("No data available")
+                else:
+                    for idx, file_id in enumerate(id_list, start = 1):
+                        print(f"[{idx:3d}]: {file_id}")
+            else:
+                id = input("File identifier: ")
+                client.update(op, keyword, id)
+            
+            print("Operation success!\n")
