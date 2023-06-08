@@ -101,7 +101,6 @@ class RoseClient:
         self.connection.send(load)
 
         search_result = self.connection.recv()
-        print(search_result)
         if len(search_result) > 0:
             id_list = []
             for id_enc in search_result:
@@ -133,7 +132,7 @@ class SYM_ENC:
             aes = AES.new(self.key, AES.MODE_GCM, nonce = cipher["nonce"])
 
             data = aes.decrypt_and_verify(cipher["ciphertext"], received_mac_tag = cipher["tag"]) # TODO
-            msg = Padding.unpad(data.encode('utf-8'), 16)
+            msg = Padding.unpad(data, 16)
 
             return msg.decode('utf-8')
 
@@ -169,3 +168,5 @@ if __name__ == "__main__":
         else:
             id = input("File identifier: ")
             client.update(op, keyword, id)
+        
+        print("Operation success!\n")
