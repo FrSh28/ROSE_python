@@ -166,10 +166,14 @@ if __name__ == "__main__":
 
             if op == OP.OP_SRCH:
                 id_list = client.search(keyword)
+                ids = set()
                 if id_list is None:
                     print("No data available")
                 else:
-                    for idx, file_id in enumerate(id_list, start = 1):
+                    for file_id in id_list:
+                        ids.add(file_id)
+
+                    for idx, file_id in enumerate(ids, start = 1):
                         print(f"[{idx:3d}]: {file_id}")
             else:
                 id = input("File identifier: ")

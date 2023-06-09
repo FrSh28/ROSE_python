@@ -77,7 +77,11 @@ class KUPRF(PRF):
         key = int.from_bytes(key, byteorder = 'big')
 
         # 33 bytes
-        return self.curve.compress(self.curve.mul(points, key))
+        result = self.curve.compress(self.curve.mul(points, key))
+        if result == bytes(33):
+            return result
+        else:
+            return b"\x02" + result[1:]
 
     def get_update_token(self, key_ori: bytes, key_new: bytes) -> bytes:
         """
@@ -117,8 +121,11 @@ class KUPRF(PRF):
         points = self.curve.decompress(msg)
         update_token = int.from_bytes(update_token, byteorder = 'big')
 
-
-        return self.curve.compress(self.curve.mul(points, update_token))
+        result = self.curve.compress(self.curve.mul(points, update_token))
+        if result == bytes(33):
+            return result
+        else:
+            return b"\x02" + result[1:]
 
 class HASH():
     def __init__(self, out_len = 32) -> None:

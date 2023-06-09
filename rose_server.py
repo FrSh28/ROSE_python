@@ -65,7 +65,6 @@ class RoseServer:
                 del self._store[s_L1]
 
                 del_list.append(s_token1)
-                # print("+++  ", s_token1)
 
                 pad = bytes(1+33) + XOR(s_L1t, s_L11) + XOR(s_T1t, s_T11)
                 self._store[s_Lt].D = XOR(self._store[s_Lt].D , pad)
@@ -74,10 +73,8 @@ class RoseServer:
                 s_T1t = s_T11
             elif s_op1 == OP.OP_ADD:  # add
                 for itr in reversed(del_list):
-                    # print("ttt  ", itr)
                     del_token = self.hash_G.compute(itr, cip.R)
-                    # print("===  ", s_L1, del_token)
-                    if s_L1 == del_token:       # if s_L1[1:] == del_token[1:]:
+                    if s_L1 == del_token:
                         L_cache.remove(s_L1)
                         del self._store[s_L1]
 
@@ -116,9 +113,7 @@ class RoseServer:
                     Deltat = s_token1
 
                 for i in range(len(del_list)):
-                    # print("   ", del_list[i])
                     del_list[i] = self.kuprf_P.update_result(del_list[i], s_token1)
-                    # print("   ", del_list[i])
 
             s_L1 = s_L11
             s_T1 = s_T11

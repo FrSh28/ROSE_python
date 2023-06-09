@@ -35,22 +35,22 @@ class Curve:
         assert self.p % 4 == 3
         yP = pow(ysqr, (self.p + 1)//4, self.p)
         assert pow(yP, 2, self.p)==ysqr
-        if yP % 2:
-            if byte == b"\x03":
-                return [xP,yP]
-            return [xP, -yP % self.p]
-        if byte == b"\x02":
+        if (yP % 2 == 1 and byte == b"\x03") \
+           or (yP % 2 == 0 and byte == b"\x02"):
             return [xP,yP]
-        return [xP, -yP % self.p]
+        else:
+            return [xP, -yP % self.p]
 
     def compress(self, P):
 
         if P[0] == None:
             return b"\x00" + b"\x00"*32
 
-        byte = b"\x02"
         if P[1] % 2:
             byte = b"\x03"
+        else:
+            byte = b"\x02"
+
         return byte + P[0].to_bytes(32, byteorder = 'big')
 
     def inv(self, point):
@@ -85,7 +85,7 @@ class Curve:
         yQ = Q[1]
         s = (yP - yQ) * pow(xP - xQ, -1, self.p) % self.p
         xR = (pow(s,2,self.p) - xP -xQ) % self.p
-        yR = (-yP + s*(xP-xR)) % self.p
+        yR = (s*(xP-xR) - yP) % self.p
         R = [xR,yR]
         return R
 
@@ -102,7 +102,7 @@ class Curve:
         yP = P[1]
         s = (3*pow(xP,2,self.p)+self.a) * pow(2*yP, -1, self.p) % self.p
         xR = (pow(s,2,self.p) - 2*xP) % self.p
-        yR = (-yP + s*(xP-xR)) % self.p
+        yR = (s*(xP-xR) - yP) % self.p
         R = [xR,yR]
         return R
 
@@ -115,10 +115,9 @@ class Curve:
         R = [None,None]
 
         while k:
-            bit = k % 2
-            k >>= 1
-            if bit:
+            if k % 2:
                 R = self.add(R,N)
             N = self.dbl(N)
+            k >>= 1
 
         return R
